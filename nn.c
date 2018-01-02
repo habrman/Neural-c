@@ -139,6 +139,17 @@ static void backProagate(Network* network, int label){
     HiddenLayer* hiddenLayer = &network->hiddenLayer;
     OutputLayer* outputLayer = &network->outputLayer;
 
+    for(int on=0; on<OUTPUT_SIZE; ++on){
+        OutputNode* outputNode = &outputLayer->nodes[on];
+
+        int nodeTarget = (on==label) ? 1:0;
+        double errorDelta = nodeTarget - outputNode->output;
+        double backPropValue = errorDelta * sigmoidDerivative(outputNode->output);
+
+        outputNode->backPropValue = backPropValue;
+        updateOutputNode(&network->hiddenLayer, outputNode, outputNode->backPropValue);
+    }
+
     for(int hn=0; hn<HIDDEN_LAYER_SIZE; ++hn){
         HiddenNode* hiddenNode = &hiddenLayer->nodes[hn];
 
@@ -146,21 +157,11 @@ static void backProagate(Network* network, int label){
 
         for(int on=0; on<OUTPUT_SIZE; ++on){
             OutputNode* outputNode = &outputLayer->nodes[on];
-            int nodeTarget = (on==label) ? 1:0;
-
-            double errorDelta = nodeTarget - outputNode->output;
-            double backPropValue = errorDelta * sigmoidDerivative(outputNode->output);
-            outputNode->backPropValue = backPropValue;
-            outputNodesBackPropSum += backPropValue * outputNode->weights[hn];
+            outputNodesBackPropSum += outputNode->backPropValue * outputNode->weights[hn];
         }
 
         double hiddenNodeBackPropValue = outputNodesBackPropSum * sigmoidDerivative(hiddenNode->output);
         updateHiddenNode(&network->inputLayer, hiddenNode, hiddenNodeBackPropValue);
-    }
-
-    for(int on=0; on<OUTPUT_SIZE; ++on){
-        OutputNode* node = &outputLayer->nodes[on];
-        updateOutputNode(&network->hiddenLayer, node, node->backPropValue);
     }
 }
 
