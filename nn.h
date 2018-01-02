@@ -1,35 +1,23 @@
 #include "dataLoader.h"
 #include "config.h"
 
-typedef struct HiddenNode_{
-    double bias;
-    double output;
-    double weights[IMAGE_SIZE];
-} HiddenNode;
-
-typedef struct OutputNode_{
+typedef struct Node_{
     double bias;
     double output;
     double backPropValue;
-    double weights[HIDDEN_LAYER_SIZE];
-} OutputNode;
+    int numberOfWeights;
+    double* weights;
+} Node;
 
-typedef struct InputLayer_{
-    double output[IMAGE_SIZE];
-} InputLayer;
-
-typedef struct HiddenLayer_{
-    HiddenNode nodes[HIDDEN_LAYER_SIZE];
-} HiddenLayer;
-
-typedef struct OutputLayer_{
-    OutputNode nodes[OUTPUT_SIZE];
-} OutputLayer;
+typedef struct Layer_{
+    int numberOfNodes;
+    Node* nodes;
+} Layer;
 
 typedef struct Network_{
-    InputLayer inputLayer;
-    HiddenLayer hiddenLayer;
-    OutputLayer outputLayer;
+    Layer inputLayer;
+    Layer hiddenLayer;
+    Layer outputLayer;
 } Network;
 
 void initNetwork(Network* network);

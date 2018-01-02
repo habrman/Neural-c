@@ -3,31 +3,20 @@
 #include <stdio.h>
 #include <math.h>
 
-static uint8_t getClassification(OutputLayer* outputLayer);
-static void backProagate(Network* network, int label);
-static void updateHiddenNode(InputLayer* inputLayer, HiddenNode* node, double backPropValue);
-static void updateOutputNode(HiddenLayer* hiddenLayer, OutputNode* node, double backPropValue);
-static void feedForward(Network* network, Image* img);
-static double sigmoidDerivative(double nodeOutput);
+static void initLayer(int numberOfNodes, int numberOfWeights, Layer* layer);
+static void initNode(int numberOfWeights, Node* node);
 static double sigmoid(double value);
-static void initWeights(int weight_size, double* weights);
+static double sigmoidDerivative(double nodeOutput);
+static void feedForwardLayer(Layer* previousLayer, Layer* layer);
+static void feedForward(Network* network, Image* img);
+static void updateNode(Layer* previousLayer, double backPropValue, Node* node);
+static void backProagate(Network* network, int label);
+static uint8_t getClassification(Layer* layer);
 
 void initNetwork(Network* network){
-    //Initialize hidden layer
-    HiddenLayer* hiddenLayer = &network->hiddenLayer;
-    for(int hn=0; hn<HIDDEN_LAYER_SIZE; ++hn){
-        HiddenNode* node = &hiddenLayer->nodes[hn];
-        node->bias = rand()/(double)(RAND_MAX);
-        initWeights(IMAGE_SIZE, node->weights);
-    }
-
-    //Initialize output layer
-    OutputLayer* outputLayer = &network->outputLayer;
-    for(int on=0; on<OUTPUT_SIZE; ++on){
-        OutputNode* node = &outputLayer->nodes[on];
-        node->bias = rand()/(double)(RAND_MAX);
-        initWeights(HIDDEN_LAYER_SIZE, node->weights);
-    }
+    initLayer(IMAGE_SIZE, 0, &network->inputLayer);
+    initLayer(HIDDEN_LAYER_SIZE, IMAGE_SIZE, &network->hiddenLayer);
+    initLayer(OUTPUT_SIZE, HIDDEN_LAYER_SIZE, &network->outputLayer);
 }
 
 void trainNetwork(Network* network){
@@ -72,14 +61,31 @@ void testNetwork(Network *network){
     printf("Test Accuracy: %0.2f%%\n", ((double)(imageFileHeader.maxImages - errCount) / imageFileHeader.maxImages) * 100);
 }
 
-static void initWeights(int weight_size, double* weights){
+static void initLayer(int numberOfNodes, int numberOfWeights, Layer* layer){
+    Node* nodes = malloc(numberOfNodes * sizeof(Node));
+    for(int hn=0; hn<numberOfNodes; ++hn){
+        Node* node = &nodes[hn];
+        initNode(numberOfWeights, node);
+    }
+
+    layer->numberOfNodes = numberOfNodes;
+    layer->nodes = nodes;
+}
+
+static void initNode(int numberOfWeights, Node* node){
     //Initialize weights between -0.7 and 0.7
-    for(int w=0; w<weight_size; ++w){
+    double* weights = malloc(numberOfWeights * sizeof(double));
+
+    for(int w=0; w<numberOfWeights; ++w){
         weights[w] = 0.7 * (rand()/(double)(RAND_MAX));
         if (w%2){
             weights[w] = -weights[w];
         }
     }
+
+    node->numberOfWeights = numberOfWeights;
+    node->weights = weights;
+    node->bias = rand()/(double)(RAND_MAX);
 }
 
 static double sigmoid(double value){
@@ -90,87 +96,73 @@ static double sigmoidDerivative(double nodeOutput){
     return nodeOutput * (1- nodeOutput);
 }
 
+static void feedForwardLayer(Layer* previousLayer, Layer* layer){
+    for(int hn=0; hn<layer->numberOfNodes; ++hn){
+        Node* node = &layer->nodes[hn];
+        node->output = node->bias;
+
+        for(int w=0; w<previousLayer->numberOfNodes; ++w){
+            node->output += previousLayer->nodes[w].output * node->weights[w];
+        }
+        node->output = sigmoid(node->output);
+    }
+}
+
 static void feedForward(Network* network, Image* img){
     //Populate the input layer with normalized input
     for(int i=0; i<IMAGE_SIZE; ++i)
     {
-        network->inputLayer.output[i] = (double)(img->pixels[i] / 255.0);
+        network->inputLayer.nodes[i].output = (double)(img->pixels[i] / 255.0);
     }
 
-    //Propagate through the hidden layer
-    for(int hn=0; hn<HIDDEN_LAYER_SIZE; ++hn){
-        HiddenNode* node = &network->hiddenLayer.nodes[hn];
-        node->output = node->bias;
-
-        for(int w=0; w<IMAGE_SIZE; ++w){
-            node->output += network->inputLayer.output[w] * node->weights[w];
-        }
-        node->output = sigmoid(node->output);
-    }
-
-    //Calculate network output
-    for(int on=0; on<OUTPUT_SIZE; ++on){
-        OutputNode* node = &network->outputLayer.nodes[on];
-        node->output = node->bias;
-
-        for(int w=0; w<HIDDEN_LAYER_SIZE; ++w){
-            node->output += network->hiddenLayer.nodes[w].output * node->weights[w];
-        }
-        node->output = sigmoid(node->output);
-    }
+    feedForwardLayer(&network->inputLayer, &network->hiddenLayer);
+    feedForwardLayer(&network->hiddenLayer, &network->outputLayer);
 }
 
-static void updateOutputNode(HiddenLayer* hiddenLayer, OutputNode* node, double backPropValue){
-    for(int hn=0; hn<HIDDEN_LAYER_SIZE;++hn){
-        HiddenNode* hiddenNode = &hiddenLayer->nodes[hn];
-        node->weights[hn] += LEARNING_RATE * hiddenNode->output * backPropValue;
-    }
-    node->bias += LEARNING_RATE * backPropValue;
-}
-
-static void updateHiddenNode(InputLayer* inputLayer, HiddenNode* node, double backPropValue){
-    for(int in=0; in<IMAGE_SIZE; ++in){
-        node->weights[in] += LEARNING_RATE * inputLayer->output[in] * backPropValue;
+static void updateNode(Layer* previousLayer, double backPropValue, Node* node){
+    for(int hn=0; hn<previousLayer->numberOfNodes;++hn){
+        Node* previousLayerNode = &previousLayer->nodes[hn];
+        node->weights[hn] += LEARNING_RATE * previousLayerNode->output * backPropValue;
     }
     node->bias += LEARNING_RATE * backPropValue;
 }
 
 static void backProagate(Network* network, int label){
-    HiddenLayer* hiddenLayer = &network->hiddenLayer;
-    OutputLayer* outputLayer = &network->outputLayer;
+    Layer* hiddenLayer = &network->hiddenLayer;
+    Layer* outputLayer = &network->outputLayer;
 
-    for(int on=0; on<OUTPUT_SIZE; ++on){
-        OutputNode* outputNode = &outputLayer->nodes[on];
+    for(int on=0; on<outputLayer->numberOfNodes; ++on){
+        Node* outputNode = &outputLayer->nodes[on];
 
         int nodeTarget = (on==label) ? 1:0;
         double errorDelta = nodeTarget - outputNode->output;
         double backPropValue = errorDelta * sigmoidDerivative(outputNode->output);
 
         outputNode->backPropValue = backPropValue;
-        updateOutputNode(&network->hiddenLayer, outputNode, outputNode->backPropValue);
+        updateNode(&network->hiddenLayer, outputNode->backPropValue, outputNode);
     }
 
-    for(int hn=0; hn<HIDDEN_LAYER_SIZE; ++hn){
-        HiddenNode* hiddenNode = &hiddenLayer->nodes[hn];
+    for(int hn=0; hn<hiddenLayer->numberOfNodes; ++hn){
+        Node* hiddenNode = &hiddenLayer->nodes[hn];
 
         double outputNodesBackPropSum = 0;
 
-        for(int on=0; on<OUTPUT_SIZE; ++on){
-            OutputNode* outputNode = &outputLayer->nodes[on];
+        for(int on=0; on<outputLayer->numberOfNodes; ++on){
+            Node* outputNode = &outputLayer->nodes[on];
             outputNodesBackPropSum += outputNode->backPropValue * outputNode->weights[hn];
         }
 
         double hiddenNodeBackPropValue = outputNodesBackPropSum * sigmoidDerivative(hiddenNode->output);
-        updateHiddenNode(&network->inputLayer, hiddenNode, hiddenNodeBackPropValue);
+        updateNode(&network->inputLayer, hiddenNodeBackPropValue, hiddenNode);
     }
 }
 
-static uint8_t getClassification(OutputLayer* outputLayer){
+static uint8_t getClassification(Layer* layer){
     double maxOutput = 0;
     int maxIndex = 0;
 
-    for(int on=0; on<OUTPUT_SIZE; ++on){
-        double nodeOutput = outputLayer->nodes[on].output;
+    for(int on=0; on<layer->numberOfNodes; ++on){
+        double nodeOutput = layer->nodes[on].output;
         if(nodeOutput > maxOutput){
             maxOutput = nodeOutput;
             maxIndex = on;
