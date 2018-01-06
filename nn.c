@@ -10,7 +10,7 @@ static double sigmoidDerivative(double nodeOutput);
 static void feedForwardLayer(Layer* previousLayer, Layer* layer);
 static void feedForward(Network* network, Image* img);
 static void updateNode(Layer* previousLayer, double backPropValue, Node* node);
-static void backProagate(Network* network, int label);
+static void backPropagate(Network* network, int label);
 static uint8_t getClassification(Layer* layer);
 
 void initNetwork(Network* network){
@@ -26,13 +26,13 @@ void trainNetwork(Network* network){
     imageFile = openImageFile(TRAINING_SET_IMAGE_FILE_NAME, &imageFileHeader);
     labelFile = openLabelFile(TRAINING_SET_LABEL_FILE_NAME);
 
-    for (int i=0; i<imageFileHeader.maxImages; i++){
+    for(int i=0; i<imageFileHeader.maxImages; i++){
         Image img;
         getImage(imageFile, &img);
         uint8_t label = getLabel(labelFile);
 
         feedForward(network, &img);
-        backProagate(network, label);
+        backPropagate(network, label);
     }
 }
 
@@ -44,7 +44,7 @@ void testNetwork(Network *network){
     labelFile = openLabelFile(TEST_SET_LABEL_FILE_NAME);
 
     int errCount = 0;
-    for (int i=0; i<imageFileHeader.maxImages; i++){
+    for(int i=0; i<imageFileHeader.maxImages; i++){
         Image img;
         getImage(imageFile, &img);
         uint8_t lbl = getLabel(labelFile);
@@ -120,14 +120,14 @@ static void feedForward(Network* network, Image* img){
 }
 
 static void updateNode(Layer* previousLayer, double backPropValue, Node* node){
-    for(int hn=0; hn<previousLayer->numberOfNodes;++hn){
+    for(int hn=0; hn<previousLayer->numberOfNodes; ++hn){
         Node* previousLayerNode = &previousLayer->nodes[hn];
         node->weights[hn] += LEARNING_RATE * previousLayerNode->output * backPropValue;
     }
     node->bias += LEARNING_RATE * backPropValue;
 }
 
-static void backProagate(Network* network, int label){
+static void backPropagate(Network* network, int label){
     Layer* hiddenLayer = &network->hiddenLayer;
     Layer* outputLayer = &network->outputLayer;
 
